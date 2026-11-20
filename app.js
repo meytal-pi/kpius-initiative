@@ -54,6 +54,7 @@
     'Restrained', 'Stunned', 'Unconscious', 'Concentrating',
   ];
   const FB_VERSION = '10.12.2';
+  const APP_VERSION = 7; // bumped by tools/bump-version.ps1 together with version.json
 
   // ================================================================
   //  Small utilities
@@ -138,9 +139,9 @@
   const params = new URLSearchParams(location.search);
   if (params.has('dm')) LS.set('dm', params.get('dm') !== '0');
   if (params.has('room')) LS.set('room', cleanRoom(params.get('room')));
-  if (params.has('room') || params.has('dm')) {
+  if (params.has('room') || params.has('dm') || params.has('v')) {
     // Don't leave the table code in the address bar / bookmarks / history.
-    params.delete('room'); params.delete('dm');
+    params.delete('room'); params.delete('dm'); params.delete('v');
     const qs = params.toString();
     try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (e) { /* ignore */ }
   }
@@ -1183,7 +1184,8 @@
         el('ul', { class: 'small tips' },
           el('li', null, 'Mini view (⧉): in Chrome on a PC it opens a small window that stays on top of other windows.'),
           el('li', null, 'Tablet: Chrome menu ⋮ → “Add to Home screen” to open it like an app.'),
-          el('li', null, 'Keyboard (PC): A = add, N / → = next turn, P / ← = previous turn.'))),
+          el('li', null, 'Keyboard (PC): A = add, N / → = next turn, P / ← = previous turn.')),
+        el('p', { class: 'muted small' }, `Version ${APP_VERSION}`)),
       footer: [el('button', { class: 'btn primary', onclick: () => closeModal() }, 'Done')],
     });
   }
@@ -1322,6 +1324,29 @@
   })();
 
   // ================================================================
+  //  Auto-update: browsers may keep old copies of the files for a while.
+  //  Ask the server (bypassing the cache) for the latest version number.
+  // ================================================================
+  async function checkForUpdate() {
+    if (location.protocol === 'file:') return;
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const latest = (await r.json()).version;
+      if (!(latest > APP_VERSION)) return;
+      const key = 'it:reloadedFor';
+      if (sessionStorage.getItem(key) === String(latest)) {
+        showBanner('A new version is available. If it doesn\'t load, close the app fully and reopen it.', 'warn');
+        return;
+      }
+      sessionStorage.setItem(key, String(latest));
+      // A new URL makes the browser fetch a fresh page instead of its cached copy.
+      location.replace(location.pathname + '?v=' + latest);
+    } catch (e) { /* offline — try again later */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+
+  // ================================================================
   //  Toasts, banner, sync status
   // ================================================================
   function toast(msg, opts = {}) {
@@ -1370,6 +1395,7 @@
   // ================================================================
   async function boot() {
     window.__appStarted = true;
+    checkForUpdate();
     applyScale();
     if (MINI_MODE) {
       document.body.classList.add('mini-body', 'mini-mode');
