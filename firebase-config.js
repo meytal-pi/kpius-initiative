@@ -27,6 +27,6 @@ window.FIREBASE_CONFIG = {
 };
 */
 
-// The "room" name. Both devices use this unless changed in Settings.
-// Make it something hard to guess — anyone who knows it can see/edit the table.
-window.DEFAULT_ROOM = "barakgay";
+// Table (room) code: leave this as null. Each device asks for the code once and remembers it,
+// so the code is never stored in these public files.
+window.DEFAULT_ROOM = null;

@@ -126,11 +126,18 @@
   const params = new URLSearchParams(location.search);
   if (params.has('dm')) LS.set('dm', params.get('dm') !== '0');
   if (params.has('room')) LS.set('room', cleanRoom(params.get('room')));
+  if (params.has('room') || params.has('dm')) {
+    // Don't leave the table code in the address bar / bookmarks / history.
+    params.delete('room'); params.delete('dm');
+    const qs = params.toString();
+    try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (e) { /* ignore */ }
+  }
   const MINI_MODE = params.get('mini') === '1';
 
   const prefs = {
     dm: LS.get('dm', null), // null = not chosen yet → ask on first visit
-    room: LS.get('room', null) || cleanRoom(window.DEFAULT_ROOM || 'my-table'),
+    // Room code: asked once per device (not stored in the public files).
+    room: LS.get('room', null) || (window.DEFAULT_ROOM ? cleanRoom(window.DEFAULT_ROOM) : null),
     scale: LS.get('scale', 1),
   };
 
@@ -683,19 +690,19 @@
   // ================================================================
   let modal = null;
 
-  function openModal({ title, body, footer, cls, refresh }) {
+  function openModal({ title, body, footer, cls, refresh, locked }) {
     closeModal(true);
     const box = el('div', { class: 'modal ' + (cls || '') },
       el('div', { class: 'modal-head' },
         el('h3', null, title),
-        el('button', { class: 'icon-btn', title: 'Close', onclick: () => closeModal() }, '✕')),
+        !locked && el('button', { class: 'icon-btn', title: 'Close', onclick: () => closeModal() }, '✕')),
       el('div', { class: 'modal-body' }, body),
       footer && el('div', { class: 'modal-foot' }, footer));
     const back = el('div', { class: 'backdrop' }, box);
     back.addEventListener('pointerdown', (e) => { if (e.target === back) back.dataset.down = '1'; });
-    back.addEventListener('click', (e) => { if (e.target === back && back.dataset.down) closeModal(); delete back.dataset.down; });
+    back.addEventListener('click', (e) => { if (!locked && e.target === back && back.dataset.down) closeModal(); delete back.dataset.down; });
     $('#modalRoot').appendChild(back);
-    modal = { back, refresh, onClose: null, keydown: null };
+    modal = { back, refresh, onClose: null, keydown: null, locked: !!locked };
     return modal;
   }
   function closeModal() {
@@ -1087,6 +1094,38 @@
     m.onClose = () => { if (prefs.dm === null) setRole(false); };
   }
 
+  // ---------- table (room) code ----------
+  function askRoomCode() {
+    return new Promise((resolve) => {
+      const input = el('input', {
+        class: 'input room-input', placeholder: 'e.g. owlbear-pancakes-77', autocomplete: 'off',
+        autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', enterkeyhint: 'go',
+      });
+      const err = el('div', { class: 'small danger-text' });
+      const go = () => {
+        const raw = input.value.trim();
+        if (raw.length < 4) { err.textContent = 'Please enter at least 4 characters.'; input.focus(); return; }
+        const r = cleanRoom(raw);
+        LS.set('room', r);
+        closeModal();
+        resolve(r);
+      };
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+      openModal({
+        title: '🔑 Enter your table code',
+        locked: true,
+        body: el('div', null,
+          el('p', null, 'Every device that enters the same code shares the same initiative table.'),
+          input, err,
+          el('p', { class: 'muted small' },
+            'First time? Make up a code that\'s hard to guess and enter the same one on the tablet and the PC. ',
+            'Not case-sensitive. You\'re only asked once per device — change it later in ⚙ Settings.')),
+        footer: [el('button', { class: 'btn primary', onclick: go }, 'Join table')],
+      });
+      setTimeout(() => input.focus(), 50);
+    });
+  }
+
   // ---------- settings ----------
   function openSettings() {
     const roomInput = el('input', { class: 'input', value: prefs.room, autocomplete: 'off' });
@@ -1110,17 +1149,19 @@
         el('p', { class: 'small' }, synced
           ? '✅ Synced through Firebase. Every device using the same room sees the same table.'
           : '⚠ Local mode: data stays in this browser only. Fill in firebase-config.js to sync devices (see SETUP.md).'),
-        field('Room',
+        field('Table code',
           el('div', { class: 'inline' }, roomInput,
             el('button', {
               class: 'btn', onclick: () => {
+                if (roomInput.value.trim().length < 4) { toast('Code must be at least 4 characters'); return; }
                 const r = cleanRoom(roomInput.value);
                 if (r === prefs.room) return;
                 LS.set('room', r);
-                location.href = location.pathname + '?room=' + encodeURIComponent(r);
+                location.href = location.pathname;
               },
             }, 'Switch'))),
-        el('p', { class: 'muted small' }, 'Link for this room: ', el('code', { class: 'select-all' }, shareUrl)),
+        el('p', { class: 'muted small' }, 'Shortcut link that joins this table directly (keep it private): ',
+          el('code', { class: 'select-all' }, shareUrl)),
         el('h4', null, 'Tips'),
         el('ul', { class: 'small tips' },
           el('li', null, 'Mini view (⧉): in Chrome on a PC it opens a small window that stays on top of other windows.'),
@@ -1243,7 +1284,7 @@
   // ================================================================
   function globalKeys(e) {
     if (modal) {
-      if (e.key === 'Escape') { closeModal(); return; }
+      if (e.key === 'Escape') { if (!modal.locked) closeModal(); return; }
       if (modal.keydown && !isTyping(e)) modal.keydown(e);
       return;
     }
@@ -1278,6 +1319,9 @@
     $('#roleBadge').addEventListener('click', openRoleChooser);
     document.addEventListener('keydown', globalKeys);
     if (!pipSupported && matchMedia('(pointer: coarse)').matches) $('#btnPip').classList.add('hidden');
+
+    render();
+    if (!prefs.room) prefs.room = await askRoomCode();
 
     const cfg = window.FIREBASE_CONFIG;
     if (cfg && cfg.apiKey && cfg.databaseURL) {

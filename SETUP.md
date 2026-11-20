@@ -48,7 +48,7 @@ Hosting: **GitHub Pages** (free) · Live sync: **Firebase Realtime Database** (f
    ```
    ⚠ Make sure **`databaseURL`** is there. If it's missing, copy the URL shown at the top of the
    *Realtime Database → Data* page (starts with `https://` and ends with `firebasedatabase.app` or `firebaseio.com`).
-7. In the same file, change `DEFAULT_ROOM` to something only you'd guess, e.g. `"thursday-crew-x92k"`.
+7. Leave `DEFAULT_ROOM` as `null`. The app asks each device for a **table code** instead (see below).
 
 > The `apiKey` is not a secret — it's normal for it to be in a public website. Access is controlled by the rules above.
 
@@ -65,8 +65,12 @@ To update later (e.g. new version of the files): repo → **Add file → Upload 
 
 ## 3. Devices
 
+**Table code:** the first time each device opens the app, it asks for a **table code**. Make one up that's
+hard to guess and enter the *same* code on the tablet and the PC — that's what links them. It's remembered
+on each device and never stored in the public files. Change it in **⚙ Settings → Table code**.
+
 **Tablet (players):** open the URL in Chrome → menu **⋮ → Add to Home screen**. Now it opens like an app.
-On first open it asks *"Who is using this device?"* → choose **🎲 Players**.
+After the code, it asks *"Who is using this device?"* → choose **🎲 Players**.
 
 **DM's PC:** open the same URL in Chrome and bookmark it. On first open choose **🛡 Dungeon Master**.
 Only DM screens show hidden enemies. The badge at the top (**🎲 Players** / **🛡 DM screen**) always shows the
