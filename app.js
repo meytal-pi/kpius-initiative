@@ -25,6 +25,18 @@
     };
   });
 
+  // Detect flexbox `gap` support (missing before Chrome 84) → CSS uses margins instead.
+  (function () {
+    const d = document.createElement('div');
+    d.style.cssText = 'display:flex;flex-direction:column;row-gap:1px;position:absolute;visibility:hidden';
+    d.appendChild(document.createElement('div'));
+    d.appendChild(document.createElement('div'));
+    document.body.appendChild(d);
+    const ok = d.scrollHeight === 1;
+    d.parentNode.removeChild(d);
+    if (!ok) document.documentElement.classList.add('no-flexgap');
+  })();
+
   // ================================================================
   //  Constants
   // ================================================================
@@ -537,7 +549,6 @@
     el('div', { class: 'info', onclick: () => openEdit(c.id) },
       el('div', { class: 'name-line' },
         el('span', { class: 'name' }, c.name || '?'),
-        el('span', { class: 'type-label' }, (TYPES[c.type] || {}).label || ''),
         c.hidden && revealButton(c.id),
         isCur && el('span', { class: 'tag now-tag' }, 'NOW'),
         isNext && el('span', { class: 'tag next-tag' }, 'NEXT')),

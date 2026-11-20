@@ -119,7 +119,7 @@ code { background: var(--panel2); padding: 2px 6px; border-radius: 6px; word-bre
   box-shadow: 0 0 0 3px var(--accent), 0 0 18px rgba(227,180,72,.45);
   background: linear-gradient(var(--tcbg2), var(--tcbg2)), var(--panel);
 }
-.row.next { box-shadow: 0 0 0 2px var(--accent) inset; outline: 2px dashed rgba(227,180,72,.6); outline-offset: 2px; }
+.row.next { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .row.dragging { box-shadow: 0 12px 30px rgba(0,0,0,.6); transform: scale(1.02); opacity: .95; }
 .row-placeholder { border: 2px dashed var(--line); border-radius: var(--radius); }
 .handle {
@@ -194,16 +194,22 @@ body.dm .bottombar { border-top: 3px solid #8b5cf6; }
 /* ---------- modals ---------- */
 .backdrop {
   position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 100; background: rgba(0,0,0,.6);
-  display: flex; align-items: center; justify-content: center; padding: .8rem;
+  display: flex; align-items: flex-start; justify-content: center; padding: .8rem;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
   animation: fade .15s ease-out;
 }
 .modal {
-  width: min(540px, 100%); max-height: calc(100dvh - 1.6rem); display: flex; flex-direction: column;
+  margin: auto; /* centers, but stays scrollable when taller than the screen */
+  width: 100%; max-width: 540px;
+  max-height: calc(100vh - 1.6rem); max-height: calc(100dvh - 1.6rem);
+  display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0,0,0,.6); animation: pop .15s ease-out;
 }
-.modal.wide { width: min(780px, 100%); }
-.modal.kp-modal { width: min(400px, 100%); }
+.modal.wide { max-width: 780px; }
+.modal.kp-modal { max-width: 400px; }
+.modal-head, .modal-foot { flex: none; }
+.modal-body { min-height: 0; }
 .modal-head { display: flex; align-items: center; gap: .5rem; padding: .7rem .6rem .5rem 1.1rem; }
 .modal-head h3 { flex: 1; margin: 0; font-size: 1.15rem; }
 .modal-body { padding: .3rem 1.1rem 1rem; overflow-y: auto; }
@@ -362,3 +368,19 @@ body.dm .bottombar { border-top: 3px solid #8b5cf6; }
   .btn.big { min-width: 0; }
   .title { font-size: 1rem; }
 }
+
+/* ---------- fallback spacing for browsers without flexbox `gap` (older Android Chrome) ---------- */
+.no-flexgap .topbar > * + *, .no-flexgap .turn-controls > * + *, .no-flexgap .banner > * + *,
+.no-flexgap .modal-head > * + *, .no-flexgap .title-typed > * + *, .no-flexgap .toggle-row > * + *,
+.no-flexgap .stepper > * + *, .no-flexgap .menu-item > * + *, .no-flexgap .party-row > * + *,
+.no-flexgap .toast > * + *, .no-flexgap .mini-head > * + *, .no-flexgap .reveal-btn > * + *,
+.no-flexgap .chip > * + * { margin-left: .45rem; }
+.no-flexgap .bottombar > *, .no-flexgap .name-line > *, .no-flexgap .conds > *, .no-flexgap .inline > *,
+.no-flexgap .seg > *, .no-flexgap .modal-foot > *, .no-flexgap .applied-row > *,
+.no-flexgap .mini-row > *, .no-flexgap .mini-conds > * { margin-right: .45rem; margin-bottom: .3rem; }
+.no-flexgap .pending-main > * + *, .no-flexgap .order-list > * + *, .no-flexgap .empty > * + *,
+.no-flexgap .toggle-text > * + *, .no-flexgap .kp > * + *, .no-flexgap .applied > * + *,
+.no-flexgap .slot-list > * + *, .no-flexgap .menu > * + *, .no-flexgap .party-list > * + *,
+.no-flexgap .role-card > * + *, .no-flexgap #toastRoot > * + * { margin-top: .45rem; }
+.no-flexgap .mini-list > * + * { margin-top: .2rem; }
+.no-flexgap .pending-main > * + * { margin-top: .1rem; }
