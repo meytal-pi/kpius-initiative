@@ -151,6 +151,8 @@
     // Room code: asked once per device (not stored in the public files).
     room: LS.get('room', null) || (window.DEFAULT_ROOM ? cleanRoom(window.DEFAULT_ROOM) : null),
     scale: LS.get('scale', 1),
+    // Keep the screen on while the app is open (default: on for touch devices like the tablet).
+    awake: LS.get('awake', matchMedia('(pointer: coarse)').matches),
   };
 
   // ================================================================
@@ -1150,6 +1152,10 @@
           (v) => store.update({ 'settings/turnTracking': v })),
         el('h4', null, 'This device'),
         field('Who uses this device?', roleButtons(() => openSettings())),
+        toggleRow('Keep screen awake', 'Stops the screen from turning off while this app is open', prefs.awake, (v) => {
+          prefs.awake = v; LS.set('awake', v);
+          if (v) keepAwake.enable(); else keepAwake.disable();
+        }),
         field('Text size',
           el('div', { class: 'inline' },
             ...[0.85, 1, 1.15, 1.3].map((s) => el('button', {
@@ -1263,6 +1269,59 @@
   }
 
   // ================================================================
+  //  Keep screen awake (only while this page is open and visible)
+  //  1) Screen Wake Lock API (Chrome 84+, needs https)
+  //  2) Fallback for older browsers: a tiny invisible muted "video"
+  //     drawn from a canvas — playing video keeps Android screens on.
+  // ================================================================
+  const keepAwake = (function () {
+    let lock = null;
+    let video = null;
+    let wanted = false;
+    function makeVideo() {
+      const c = document.createElement('canvas');
+      c.width = 2; c.height = 2;
+      const g = c.getContext('2d');
+      let i = 0;
+      const draw = () => { g.fillStyle = (i++ % 2) ? '#000' : '#111'; g.fillRect(0, 0, 2, 2); };
+      draw();
+      setInterval(() => { if (wanted) draw(); }, 1000);
+      const v = document.createElement('video');
+      v.muted = true;
+      v.setAttribute('muted', '');
+      v.setAttribute('playsinline', '');
+      v.srcObject = c.captureStream(1);
+      v.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-events:none;';
+      document.body.appendChild(v);
+      return v;
+    }
+    async function enable() {
+      wanted = true;
+      if (document.visibilityState !== 'visible') return;
+      if ('wakeLock' in navigator) {
+        if (lock) return;
+        try {
+          lock = await navigator.wakeLock.request('screen');
+          lock.addEventListener('release', () => { lock = null; });
+          return;
+        } catch (e) { /* fall through to video */ }
+      }
+      try {
+        if (!video) video = makeVideo();
+        if (video.paused) await video.play();
+      } catch (e) { /* needs a tap first; retried on next tap */ }
+    }
+    function disable() {
+      wanted = false;
+      if (lock) { lock.release().catch(() => {}); lock = null; }
+      if (video) video.pause();
+    }
+    // The browser drops the lock when the tab is hidden; take it again when we're back.
+    document.addEventListener('visibilitychange', () => { if (wanted && document.visibilityState === 'visible') enable(); });
+    return { enable, disable };
+  })();
+
+  // ================================================================
   //  Toasts, banner, sync status
   // ================================================================
   function toast(msg, opts = {}) {
@@ -1329,6 +1388,11 @@
     $('#btnStart').addEventListener('click', startCombat);
     $('#roleBadge').addEventListener('click', openRoleChooser);
     document.addEventListener('keydown', globalKeys);
+    if (prefs.awake && !MINI_MODE) {
+      keepAwake.enable();
+      // Some browsers only allow it after a tap — re-check on every tap (cheap no-op when already on).
+      document.addEventListener('pointerdown', () => { if (prefs.awake) keepAwake.enable(); }, true);
+    }
     if (!pipSupported && matchMedia('(pointer: coarse)').matches) $('#btnPip').classList.add('hidden');
 
     render();
