@@ -3,6 +3,29 @@
   'use strict';
 
   // ================================================================
+  //  Polyfills for older tablet browsers
+  // ================================================================
+  if (!Array.prototype.flat) {
+    Object.defineProperty(Array.prototype, 'flat', {
+      configurable: true, writable: true,
+      value: function flat(depth) {
+        const d = depth === undefined ? 1 : Number(depth);
+        return this.reduce((acc, v) => acc.concat(Array.isArray(v) && d > 0 ? v.flat(d - 1) : [v]), []);
+      },
+    });
+  }
+  [Element.prototype, Document.prototype, DocumentFragment.prototype].forEach((proto) => {
+    if (proto.replaceChildren) return;
+    proto.replaceChildren = function () {
+      while (this.lastChild) this.removeChild(this.lastChild);
+      for (let i = 0; i < arguments.length; i++) {
+        const n = arguments[i];
+        this.appendChild(typeof n === 'object' ? n : document.createTextNode(String(n)));
+      }
+    };
+  });
+
+  // ================================================================
   //  Constants
   // ================================================================
   const TYPES = {
@@ -69,8 +92,8 @@
   }
 
   const LS = {
-    get(k, d) { try { const v = localStorage.getItem('it:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-    set(k, v) { try { localStorage.setItem('it:' + k, JSON.stringify(v)); } catch { /* ignore */ } },
+    get(k, d) { try { const v = localStorage.getItem('it:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('it:' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
   };
 
   function loadScript(src) {
@@ -143,13 +166,13 @@
         if (e.key === this.key) { this.data = this.read(); this.emit(); }
       });
     }
-    read() { try { return JSON.parse(localStorage.getItem(this.key)) || {}; } catch { return {}; } }
+    read() { try { return JSON.parse(localStorage.getItem(this.key)) || {}; } catch (e) { return {}; } }
     emit() { if (this.cb) this.cb(clone(this.data)); }
     subscribe(cb) { this.cb = cb; this.emit(); }
     onStatus(cb) { cb('local'); }
     update(paths) {
       for (const [p, v] of Object.entries(paths)) setPath(this.data, p.split('/'), v == null ? null : clone(v));
-      try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch { /* ignore */ }
+      try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { /* ignore */ }
       this.emit();
       return Promise.resolve();
     }
@@ -203,7 +226,7 @@
   function placedList() {
     return allCombatants()
       .filter((c) => typeof c.init === 'number')
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || b.init - a.init || (a.created || 0) - (b.created || 0));
+      .sort((a, b) => (a.order || 0) - (b.order || 0) || b.init - a.init || (a.created || 0) - (b.created || 0));
   }
   function pendingList() {
     return allCombatants()
@@ -507,7 +530,7 @@
     el('div', { class: 'info', onclick: () => openEdit(c.id) },
       el('div', { class: 'name-line' },
         el('span', { class: 'name' }, c.name || '?'),
-        el('span', { class: 'type-label' }, TYPES[c.type]?.label || ''),
+        el('span', { class: 'type-label' }, (TYPES[c.type] || {}).label || ''),
         c.hidden && revealButton(c.id),
         isCur && el('span', { class: 'tag now-tag' }, 'NOW'),
         isNext && el('span', { class: 'tag next-tag' }, 'NEXT')),
@@ -596,7 +619,7 @@
     });
     row.classList.add('dragging');
     drag = { id, row, ph, list, handle, offsetY: e.clientY - rect.top, y: e.clientY, raf: 0 };
-    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    try { handle.setPointerCapture(e.pointerId); } catch (e) { /* ignore */ }
     handle.addEventListener('pointermove', onDragMove);
     handle.addEventListener('pointerup', onDragEnd);
     handle.addEventListener('pointercancel', onDragEnd);
@@ -1174,7 +1197,7 @@
       try {
         const css = [...ss.cssRules].map((r) => r.cssText).join('\n');
         doc.head.appendChild(Object.assign(doc.createElement('style'), { textContent: css }));
-      } catch {
+      } catch (e) {
         if (ss.href) doc.head.appendChild(Object.assign(doc.createElement('link'), { rel: 'stylesheet', href: ss.href }));
       }
     }
@@ -1235,6 +1258,7 @@
   //  Boot
   // ================================================================
   async function boot() {
+    window.__appStarted = true;
     applyScale();
     if (MINI_MODE) {
       document.body.classList.add('mini-body', 'mini-mode');

@@ -9,7 +9,30 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=3">
+  <script>
+    // Shows script errors on screen (helps diagnose problems on tablets). Old-browser-safe syntax.
+    (function () {
+      function show(msg) {
+        var box = document.getElementById('fatalError');
+        if (!box) {
+          box = document.createElement('div');
+          box.id = 'fatalError';
+          box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7f1d1d;color:#fff;font:14px monospace;padding:10px;white-space:pre-wrap;max-height:40%;overflow:auto';
+          (document.body || document.documentElement).appendChild(box);
+        }
+        box.textContent += msg + '\n';
+      }
+      window.addEventListener('error', function (e) {
+        show('Error: ' + e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''));
+      });
+      window.addEventListener('unhandledrejection', function (e) { show('Error: ' + (e.reason && e.reason.message || e.reason)); });
+      window.addEventListener('load', function () {
+        var m = navigator.userAgent.match(/Chrom(e|ium)\/(\d+)/);
+        if (!window.__appStarted) show('The app did not start. Browser: ' + (m ? 'Chrome ' + m[2] : navigator.userAgent));
+      });
+    })();
+  </script>
 </head>
 <body>
   <div id="app">
@@ -53,7 +76,7 @@
   <div id="modalRoot"></div>
   <div id="toastRoot"></div>
 
-  <script src="firebase-config.js"></script>
-  <script src="app.js"></script>
+  <script src="firebase-config.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>
