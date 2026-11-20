@@ -99,6 +99,7 @@ The green dot top-right = synced. Amber = reconnecting (changes are kept and sen
 | Turn tracking (optional) | **⚙ → Turn tracking**. Adds **Start combat / Next turn**, round counter, NOW/NEXT highlights and condition durations (count down at the end of that creature's turn). |
 | After a fight | **Encounter ▾ → Remove all except players** or **New encounter** (also clears players' initiative). |
 | Oops | Destructive actions show an **Undo** button for a few seconds. |
+| Several groups / parties | Tap the **🗂 table name** at the top. Give the table a name, switch to another table this device has used, or join/create one with a new code. Each table keeps its own party and initiative. Switch **each device** separately. |
 | Screen turning off | **⚙ → Keep screen awake** (on by default on tablets). Only while the app is open — the tablet's normal sleep settings aren't changed. |
 | Edit / duplicate / remove | Tap the name. |
 

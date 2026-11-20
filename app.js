@@ -54,7 +54,7 @@
     'Restrained', 'Stunned', 'Unconscious', 'Concentrating',
   ];
   const FB_VERSION = '10.12.2';
-  const APP_VERSION = 7; // bumped by tools/bump-version.ps1 together with version.json
+  const APP_VERSION = 8; // bumped by tools/bump-version.ps1 together with version.json
 
   // ================================================================
   //  Small utilities
@@ -238,6 +238,7 @@
       party: raw.party || {},
       settings: Object.assign({ turnTracking: false }, raw.settings),
       turn: Object.assign({ active: false, round: 1, currentId: null }, raw.turn),
+      meta: raw.meta || {},
     };
   }
 
@@ -579,6 +580,9 @@
     if (drag) { renderQueued = true; return; }
     document.body.classList.toggle('dm', !!prefs.dm);
     const badge = $('#roleBadge');
+    const tbl = $('#tableName');
+    tbl.textContent = state.meta.name || prefs.room || '';
+    tbl.classList.toggle('hidden', !prefs.room);
     badge.textContent = prefs.dm ? '🛡 DM screen' : '🎲 Players';
     badge.className = 'role-badge ' + (prefs.dm ? 'role-dm' : 'role-players');
 
@@ -1140,9 +1144,83 @@
     });
   }
 
+  // ---------- tables (switch between parties) ----------
+  // List of tables this device has used — kept on this device only.
+  function knownTables() { return LS.get('tables', []); }
+  function rememberTable(code, name) {
+    const list = knownTables();
+    const i = list.findIndex((t) => t.code === code);
+    if (i >= 0) { if (name !== undefined) list[i].name = name; }
+    else list.unshift({ code, name: name || '' });
+    LS.set('tables', list.slice(0, 30));
+  }
+  function forgetTable(code) { LS.set('tables', knownTables().filter((t) => t.code !== code)); }
+  function tableLabel(t) { return t.name || t.code; }
+  function switchTable(code) {
+    code = cleanRoom(code);
+    rememberTable(code);
+    if (code === prefs.room) { closeModal(); return; }
+    LS.set('room', code);
+    location.href = location.pathname;
+  }
+
+  function openTables() {
+    const nameInput = el('input', {
+      class: 'input', value: state.meta.name || '', maxlength: 40, autocomplete: 'off',
+      placeholder: 'Nickname, e.g. Thursday group', enterkeyhint: 'done',
+    });
+    const saveName = () => {
+      const nm = nameInput.value.trim();
+      store.update({ 'meta/name': nm || null });
+      rememberTable(prefs.room, nm);
+      toast(nm ? `Table named “${nm}”` : 'Table name cleared');
+      render();
+    };
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveName(); nameInput.blur(); } });
+
+    const codeInput = el('input', {
+      class: 'input', placeholder: 'Table code', autocomplete: 'off', autocapitalize: 'none',
+      autocorrect: 'off', spellcheck: 'false', enterkeyhint: 'go',
+    });
+    const join = () => {
+      if (codeInput.value.trim().length < 4) { toast('Code must be at least 4 characters'); return; }
+      switchTable(codeInput.value);
+    };
+    codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); join(); } });
+
+    const others = knownTables().filter((t) => t.code !== prefs.room);
+    const list = el('div', { class: 'table-list' });
+    const drawList = () => fill(list,
+      knownTables().filter((t) => t.code !== prefs.room).length ? null : el('p', { class: 'muted small' }, 'No other tables on this device yet.'),
+      knownTables().filter((t) => t.code !== prefs.room).map((t) => el('div', { class: 'table-row' },
+        el('button', { class: 'table-pick', onclick: () => switchTable(t.code) },
+          el('span', { class: 'table-name' }, tableLabel(t)),
+          t.name && el('span', { class: 'muted small' }, t.code)),
+        el('button', {
+          class: 'icon-btn', title: 'Forget on this device (the table itself is kept)',
+          onclick: () => { forgetTable(t.code); drawList(); },
+        }, '✕'))));
+    drawList();
+
+    openModal({
+      title: '🗂 Tables',
+      body: el('div', null,
+        el('h4', null, 'Current table'),
+        el('div', { class: 'muted small', style: 'margin-bottom:.8rem' }, 'Code: ', el('code', null, prefs.room)),
+        field('Name (shown on all devices at this table)', el('div', { class: 'inline' }, nameInput,
+          el('button', { class: 'btn', onclick: saveName }, 'Save'))),
+        el('h4', null, others.length ? 'Switch to' : 'Other tables'),
+        list,
+        el('h4', null, 'Join or create a table'),
+        el('div', { class: 'inline' }, codeInput, el('button', { class: 'btn primary', onclick: join }, 'Join')),
+        el('p', { class: 'muted small' },
+          'A new code creates a new, empty table. Each device switches on its own — remember to switch the tablet too.')),
+      footer: [el('button', { class: 'btn', onclick: () => closeModal() }, 'Close')],
+    });
+  }
+
   // ---------- settings ----------
   function openSettings() {
-    const roomInput = el('input', { class: 'input', value: prefs.room, autocomplete: 'off' });
     const shareUrl = location.origin + location.pathname + '?room=' + encodeURIComponent(prefs.room);
     const synced = store instanceof FirebaseStore;
     openModal({
@@ -1167,17 +1245,10 @@
         el('p', { class: 'small' }, synced
           ? '✅ Synced through Firebase. Every device using the same room sees the same table.'
           : '⚠ Local mode: data stays in this browser only. Fill in firebase-config.js to sync devices (see SETUP.md).'),
-        field('Table code',
-          el('div', { class: 'inline' }, roomInput,
-            el('button', {
-              class: 'btn', onclick: () => {
-                if (roomInput.value.trim().length < 4) { toast('Code must be at least 4 characters'); return; }
-                const r = cleanRoom(roomInput.value);
-                if (r === prefs.room) return;
-                LS.set('room', r);
-                location.href = location.pathname;
-              },
-            }, 'Switch'))),
+        field('Table',
+          el('div', { class: 'inline' },
+            el('span', { class: 'table-current' }, state.meta.name || prefs.room),
+            el('button', { class: 'btn', onclick: openTables }, 'Change / rename…'))),
         el('p', { class: 'muted small' }, 'Shortcut link that joins this table directly (keep it private): ',
           el('code', { class: 'select-all' }, shareUrl)),
         el('h4', null, 'Tips'),
@@ -1413,6 +1484,7 @@
     $('#btnPrev').addEventListener('click', prevTurn);
     $('#btnStart').addEventListener('click', startCombat);
     $('#roleBadge').addEventListener('click', openRoleChooser);
+    $('#tableName').addEventListener('click', openTables);
     document.addEventListener('keydown', globalKeys);
     if (prefs.awake && !MINI_MODE) {
       keepAwake.enable();
@@ -1423,6 +1495,7 @@
 
     render();
     if (!prefs.room) prefs.room = await askRoomCode();
+    rememberTable(prefs.room);
 
     const cfg = window.FIREBASE_CONFIG;
     if (cfg && cfg.apiKey && cfg.databaseURL) {
@@ -1441,7 +1514,12 @@
       }
     }
     store.onStatus(setSync);
-    store.subscribe((raw) => { state = normalize(raw); render(); }, (err) => {
+    store.subscribe((raw) => {
+      state = normalize(raw);
+      const known = knownTables().find((t) => t.code === prefs.room);
+      if (known && (known.name || '') !== (state.meta.name || '')) rememberTable(prefs.room, state.meta.name || '');
+      render();
+    }, (err) => {
       showBanner('Sync error: ' + err.message + ' — check the Firebase database rules (SETUP.md).', 'error');
     });
     if (prefs.dm === null && !MINI_MODE) openRoleChooser();
