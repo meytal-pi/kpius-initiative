@@ -54,7 +54,7 @@
     'Restrained', 'Stunned', 'Unconscious', 'Concentrating',
   ];
   const FB_VERSION = '10.12.2';
-  const APP_VERSION = 10; // bumped by tools/bump-version.ps1 together with version.json
+  const APP_VERSION = 11; // bumped by tools/bump-version.ps1 together with version.json
 
   // ================================================================
   //  Small utilities
@@ -684,10 +684,10 @@
     drag.y = e.clientY;
     positionDrag();
   }
-  // Drop on the trash bar at the bottom, or fling sideways off the list, to remove.
+  // Drop on the trash strip at the right edge, or fling sideways off the list, to remove.
   function wantsRemove() {
     const t = $('#trashZone').getBoundingClientRect();
-    const overTrash = drag.y >= t.top && drag.x >= t.left && drag.x <= t.right;
+    const overTrash = drag.x >= t.left;
     const flung = Math.abs(drag.x - drag.startX) > Math.min(220, drag.width * 0.35);
     return overTrash || flung;
   }
@@ -711,13 +711,11 @@
     if (!drag) return;
     const main = $('#main');
     const r = main.getBoundingClientRect();
-    const trashTop = $('#trashZone').getBoundingClientRect().top;
-    const bottom = Math.min(r.bottom, trashTop);
     const m = 70;
     let dy = 0;
     if (!drag.remove) {
       if (drag.y < r.top + m) dy = -Math.ceil((r.top + m - drag.y) / 5);
-      else if (drag.y > bottom - m && drag.y < bottom) dy = Math.ceil((drag.y - (bottom - m)) / 5);
+      else if (drag.y > r.bottom - m) dy = Math.ceil((drag.y - (r.bottom - m)) / 5);
     }
     if (dy) { main.scrollBy(0, dy); positionDrag(); }
     drag.raf = requestAnimationFrame(autoScroll);
