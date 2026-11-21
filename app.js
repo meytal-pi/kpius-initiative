@@ -54,7 +54,7 @@
     'Restrained', 'Stunned', 'Unconscious', 'Concentrating',
   ];
   const FB_VERSION = '10.12.2';
-  const APP_VERSION = 9; // bumped by tools/bump-version.ps1 together with version.json
+  const APP_VERSION = 10; // bumped by tools/bump-version.ps1 together with version.json
 
   // ================================================================
   //  Small utilities
@@ -666,7 +666,12 @@
       position: 'fixed', left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', zIndex: 50,
     });
     row.classList.add('dragging');
-    drag = { id, row, ph, list, handle, offsetY: e.clientY - rect.top, y: e.clientY, raf: 0 };
+    drag = {
+      id, row, ph, list, handle, raf: 0, remove: false,
+      offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+      startX: e.clientX, x: e.clientX, y: e.clientY, width: rect.width,
+    };
+    $('#trashZone').classList.remove('hidden', 'active');
     try { handle.setPointerCapture(e.pointerId); } catch (e) { /* ignore */ }
     handle.addEventListener('pointermove', onDragMove);
     handle.addEventListener('pointerup', onDragEnd);
@@ -675,12 +680,25 @@
   }
   function onDragMove(e) {
     if (!drag) return;
+    drag.x = e.clientX;
     drag.y = e.clientY;
     positionDrag();
   }
+  // Drop on the trash bar at the bottom, or fling sideways off the list, to remove.
+  function wantsRemove() {
+    const t = $('#trashZone').getBoundingClientRect();
+    const overTrash = drag.y >= t.top && drag.x >= t.left && drag.x <= t.right;
+    const flung = Math.abs(drag.x - drag.startX) > Math.min(220, drag.width * 0.35);
+    return overTrash || flung;
+  }
   function positionDrag() {
-    const { row, ph, list, offsetY, y } = drag;
+    const { row, ph, list, offsetX, offsetY, x, y } = drag;
     row.style.top = (y - offsetY) + 'px';
+    row.style.left = (x - offsetX) + 'px';
+    drag.remove = wantsRemove();
+    row.classList.toggle('will-remove', drag.remove);
+    $('#trashZone').classList.toggle('active', drag.remove);
+    if (drag.remove) return; // keep the placeholder where it was
     let before = null;
     for (const o of list.querySelectorAll('.row:not(.dragging)')) {
       const r = o.getBoundingClientRect();
@@ -693,10 +711,14 @@
     if (!drag) return;
     const main = $('#main');
     const r = main.getBoundingClientRect();
+    const trashTop = $('#trashZone').getBoundingClientRect().top;
+    const bottom = Math.min(r.bottom, trashTop);
     const m = 70;
     let dy = 0;
-    if (drag.y < r.top + m) dy = -Math.ceil((r.top + m - drag.y) / 5);
-    else if (drag.y > r.bottom - m) dy = Math.ceil((drag.y - (r.bottom - m)) / 5);
+    if (!drag.remove) {
+      if (drag.y < r.top + m) dy = -Math.ceil((r.top + m - drag.y) / 5);
+      else if (drag.y > bottom - m && drag.y < bottom) dy = Math.ceil((drag.y - (bottom - m)) / 5);
+    }
     if (dy) { main.scrollBy(0, dy); positionDrag(); }
     drag.raf = requestAnimationFrame(autoScroll);
   }
@@ -708,20 +730,25 @@
     d.handle.removeEventListener('pointermove', onDragMove);
     d.handle.removeEventListener('pointerup', onDragEnd);
     d.handle.removeEventListener('pointercancel', onDragEnd);
+    $('#trashZone').classList.add('hidden');
 
     let nextEl = d.ph.nextElementSibling;
     while (nextEl && (nextEl === d.row || !nextEl.classList.contains('row'))) nextEl = nextEl.nextElementSibling;
     const beforeId = nextEl ? nextEl.dataset.id : null;
     d.ph.remove();
     d.row.removeAttribute('style');
-    d.row.classList.remove('dragging');
+    d.row.classList.remove('dragging', 'will-remove');
 
-    const old = placedList().map((c) => c.id);
-    const ids = old.filter((x) => x !== d.id);
-    let idx = beforeId ? ids.indexOf(beforeId) : ids.length;
-    if (idx < 0) idx = ids.length;
-    ids.splice(idx, 0, d.id);
-    commitMove(d.id, ids);
+    if (d.remove) {
+      removeCombatant(d.id); // has Undo, and passes the turn on if needed
+    } else {
+      const old = placedList().map((c) => c.id);
+      const ids = old.filter((x) => x !== d.id);
+      let idx = beforeId ? ids.indexOf(beforeId) : ids.length;
+      if (idx < 0) idx = ids.length;
+      ids.splice(idx, 0, d.id);
+      commitMove(d.id, ids);
+    }
     renderQueued = false;
     render();
   }
