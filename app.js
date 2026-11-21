@@ -54,7 +54,7 @@
     'Restrained', 'Stunned', 'Unconscious', 'Concentrating',
   ];
   const FB_VERSION = '10.12.2';
-  const APP_VERSION = 8; // bumped by tools/bump-version.ps1 together with version.json
+  const APP_VERSION = 9; // bumped by tools/bump-version.ps1 together with version.json
 
   // ================================================================
   //  Small utilities
@@ -401,10 +401,33 @@
     toast(`Added ${obj.name}`);
   }
 
+  // Save a manual reorder. If the creature whose turn it is gets moved (e.g. a player
+  // delays to the end of the round), the turn passes to whoever was next in the
+  // ORIGINAL order — it doesn't travel with the moved creature.
+  function commitMove(movedId, newIds) {
+    const oldIds = placedList().map((x) => x.id);
+    if (newIds.join() === oldIds.join()) return;
+    const paths = orderPaths(newIds);
+    if (combatActive() && state.turn.currentId === movedId && oldIds.length > 1) {
+      const i = oldIds.indexOf(movedId);
+      let nextId = oldIds[i + 1];
+      let round = state.turn.round || 1;
+      if (!nextId) { nextId = oldIds[0]; round++; }
+      paths['turn/currentId'] = nextId;
+      paths['turn/round'] = round;
+      const moved = state.combatants[movedId];
+      const next = state.combatants[nextId];
+      if (moved && next) {
+        toast(`${moved.name} delays — ${isVisible(Object.assign({}, next)) ? next.name : 'next creature'}'s turn`);
+      }
+    }
+    store.update(paths);
+  }
+
   function moveToEnd(id) {
     const ids = placedList().map((x) => x.id).filter((x) => x !== id);
     ids.push(id);
-    store.update(orderPaths(ids));
+    commitMove(id, ids);
   }
 
   function sortByInitiative() {
@@ -698,7 +721,7 @@
     let idx = beforeId ? ids.indexOf(beforeId) : ids.length;
     if (idx < 0) idx = ids.length;
     ids.splice(idx, 0, d.id);
-    if (ids.join() !== old.join()) store.update(orderPaths(ids));
+    commitMove(d.id, ids);
     renderQueued = false;
     render();
   }
